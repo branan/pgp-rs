@@ -1,0 +1,11 @@
+[package]
+authors = ["Branan Riley <branan@puppet.com>"]
+name = "pgp"
+version = "0.1.0"
+[dependencies]
+byteorder = "*"
+error-chain = "*"
+lazy_static = "*"
+regex = "*"
+rustc-serialize = "*"
+sodiumoxide = "*"
