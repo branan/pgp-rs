@@ -51,6 +51,8 @@ fn parsing_header_lines() {
     assert!(ArmorType::from_header("-----BEGIN PGP PRIVATE KEY BLOCK-----").is_ok());
     assert!(ArmorType::from_header("-----BEGIN PGP SIGNATURE-----").is_ok());
     assert!(ArmorType::from_header("-----BEGIN PGP MESSAGE-----").is_ok());
+    assert!(ArmorType::from_header("-----BEGIN PGP MESSAGE-----").unwrap()
+            == ArmorType::Message(None, None));
     assert!(ArmorType::from_header("-----BEGIN PGP MESSAGE 42-----").is_ok());
     assert!(ArmorType::from_header("-----BEGIN PGP MESSAGE 42-----").unwrap()
             == ArmorType::Message(Some(42), None));
@@ -65,6 +67,8 @@ fn parsing_footer_lines() {
     assert!(ArmorType::from_footer("-----END PGP PRIVATE KEY BLOCK-----").is_ok());
     assert!(ArmorType::from_footer("-----END PGP SIGNATURE-----").is_ok());
     assert!(ArmorType::from_footer("-----END PGP MESSAGE-----").is_ok());
+    assert!(ArmorType::from_header("-----BEGIN PGP MESSAGE-----").unwrap()
+            == ArmorType::Message(None, None));
     assert!(ArmorType::from_footer("-----END PGP MESSAGE 42-----").is_ok());
     assert!(ArmorType::from_footer("-----END PGP MESSAGE 42-----").unwrap()
             == ArmorType::Message(Some(42), None));

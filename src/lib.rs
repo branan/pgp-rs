@@ -11,8 +11,6 @@ use errors::*;
 
 pub mod armor;
 
-use armor::unarmor;
-
 #[cfg(test)]
 mod tests {
     pub mod fixtures {
