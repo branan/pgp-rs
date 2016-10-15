@@ -23,6 +23,7 @@ pub use publickey::PublicKey;
 #[derive(Eq)]
 pub enum Packet {
     PublicKey(PublicKey),
+    UserID(String),
 }
 
 pub struct PacketIterator<'a> {
@@ -103,6 +104,14 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
                 Ok(val) => Some(Ok(Packet::PublicKey(val))),
                 Err(err) => Some(Err(err))
             },
+            13 => {
+                // Copy the data from the buffer for our string
+                let data = stream.into_inner().to_owned();
+                match String::from_utf8(data) {
+                    Ok(id) => Some(Ok(Packet::UserID(id))),
+                    Err(err) => Some(Err(err).chain_err(|| "User ID was not utf-8"))
+                }
+            },
             _ => Some(Err(ErrorKind::UnknownPacket(tag).into()))
         }
     }
@@ -171,11 +180,18 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
         pub const EXPECTED_E: [u8; 3] = [1, 0, 1];
     }
 
+    fn armored_data(armored: &str) -> Vec<u8> {
+        use super::Armor;
+
+        Armor::read(armored).unwrap().data
+    }
+
     #[test]
     pub fn can_read_pubkey() {
         use super::*;
         use tests::fixtures::*;
-        let stream = Armor::read(PUBKEY).unwrap().data;
+
+        let stream = armored_data(PUBKEY);
         let mut packets: Vec<_> = PacketIterator::new(&stream).collect();
         assert!(packets.len() >= 1);
         assert!(packets[0].is_ok());
