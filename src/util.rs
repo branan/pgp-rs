@@ -1,12 +1,10 @@
 use errors::*;
 use std::io;
-use byteorder;
 use byteorder::{BigEndian,ReadBytesExt};
 
 fn read_bytes<T: io::Read>(data: &mut T, len: usize) -> Result<Vec<u8>> {
     let mut result: Vec<u8> = vec![0; len];
-    let mut bytes_read = 0;
-    try!(data.read_exact(&mut result[bytes_read..]).chain_err(|| "Could not read packet bytes"));
+    try!(data.read_exact(&mut result).chain_err(|| "Could not read packet bytes"));
     Ok(result)
 }
 

@@ -88,6 +88,11 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
             self.cursor += 1;
         }
 
+        if self.cursor+len >= self.data.len() {
+            self.errored = true;
+            return Some(Err(ErrorKind::Packet.into()));
+        }
+
         let mut stream = io::Cursor::new(&self.data[self.cursor..self.cursor+len]);
         self.cursor += len;
 
@@ -179,7 +184,8 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
 
         let comparison_packet = Packet::PublicKey( PublicKey::Rsa( RsaPublicKey {
             n: EXPECTED_N.to_owned(),
-            e: (&EXPECTED_E[..]).to_owned()
+            e: (&EXPECTED_E[..]).to_owned(),
+            timestamp: 1436993276
         }));
         assert_eq!(packets.remove(0).unwrap(), comparison_packet)
     }
