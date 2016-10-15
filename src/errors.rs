@@ -1,3 +1,4 @@
+#![allow(redundant_closure)]
 error_chain! {
     errors {
         Unsupported(t: &'static str) {

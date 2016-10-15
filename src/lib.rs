@@ -1,3 +1,8 @@
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+#![deny(warnings)]
+#![allow(unknown_lints)] // This lets us manage clippy lints without needing a cfg_attr check everywhere that we do so.
+
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
@@ -86,7 +91,7 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
         let len_bytes = 1 << len_type;
         let mut len: usize = 0;
         for _ in 0..len_bytes {
-            len = len << 8;
+            len <<= 8;
             len |= self.data[self.cursor] as usize;
             self.cursor += 1;
         }

@@ -3,9 +3,13 @@ authors = ["Branan Riley <branan@puppet.com>"]
 name = "pgp"
 version = "0.1.0"
 [dependencies]
-byteorder = "*"
-error-chain = "*"
-lazy_static = "*"
-regex = "*"
-rustc-serialize = "*"
-sodiumoxide = "*"
+byteorder = "0.5.3"
+error-chain = "0.5.0"
+lazy_static = "0.2.1"
+regex = "0.1.77"
+rustc-serialize = "0.3.19"
+sodiumoxide = "0.0.12"
+clippy = { version = "*", optional = true }
+
+[features]
+nightly = ["clippy"]
