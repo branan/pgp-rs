@@ -11,6 +11,89 @@ use errors::*;
 
 pub mod armor;
 
+#[derive(Debug)]
+pub enum Packet {
+}
+
+struct PacketIterator<'a> {
+    data: &'a[u8],
+    cursor: usize,
+
+    // This means that we errored on a packet /header/ and have
+    // de-synched from the bytesream. If any individual packet can't
+    // be read, it will end up as a simple Result in the stream.
+    errored: bool,
+}
+
+impl<'a> PacketIterator<'a> {
+    pub fn new(data: &'a[u8]) -> PacketIterator<'a> {
+        PacketIterator {
+            data: data,
+            cursor: 0,
+            errored: false
+        }
+    }
+}
+
+impl<'a> std::iter::Iterator for PacketIterator<'a> {
+    type Item = Result<Packet>;
+
+    fn next(&mut self) -> Option<Result<Packet>> {
+        // We need at least one tag byte to start with. Ideally this
+        // is our "done" case - we've read all the data and can return
+        // None now.
+        if self.cursor >= self.data.len() || self.errored {
+            return None;
+        }
+
+        let tag_byte = self.data[self.cursor];
+        let tag = (tag_byte >> 2) & 0x0f;
+        let len_type = tag_byte & 0x03;
+        let style = (tag_byte >> 6) & 0x01;
+        let check = (tag_byte >> 7) & 0x01;
+
+        if check == 0 {
+            self.errored = true;
+            return Some(Err(ErrorKind::Packet.into()));
+        }
+
+        if style != 0 {
+            self.errored = true;
+            return Some(Err(ErrorKind::Unsupported("new-style packet length").into()));
+        }
+
+        if len_type == 3 {
+            self.errored = true;
+            return Some(Err(ErrorKind::Unsupported("indeterminate-length packets").into()));
+        }
+
+        // Increment the cursor for that tag byte we just read
+        self.cursor += 1;
+
+        // Read the right number of length bytes, incrementing the
+        // cursor as we go
+        let len_bytes = 1 << len_type;
+        let mut len: usize = 0;
+        for _ in 0..len_bytes {
+            len = len << 8;
+            len |= self.data[self.cursor] as usize;
+            self.cursor += 1;
+        }
+
+        // TODO: actually create an io::Cursor to pass to the packet reading
+        self.cursor += len;
+
+        // TODO: pass the io::Cursor into the packet-specific parser
+        match tag {
+            _ => Some(Err(ErrorKind::UnknownPacket(tag).into()))
+        }
+    }
+}
+
+pub fn read_stream(data: &[u8]) -> Vec<Result<Packet>> {
+    PacketIterator::new(data).collect()
+}
+
 #[cfg(test)]
 mod tests {
     pub mod fixtures {
@@ -71,4 +154,5 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
 -----END PGP PRIVATE KEY BLOCK-----";
 
     }
+
 }

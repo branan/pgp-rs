@@ -98,7 +98,9 @@ pub fn unarmor(armored: &str) -> Result<Vec<u8>> {
     let begin_line = try!(lines.next().ok_or(ErrorKind::Armor));
     let armor_type = try!(ArmorType::from_header(begin_line));
 
-    // Skip any header values - we don't care about them.
+    // TODO: We should pass these skipped header lines out, as they
+    // could include information about multipart ordering that is
+    // needed before a stream could actually be read to packets.
     while try!(lines.next().ok_or(ErrorKind::Armor)) != "" {}
 
     // Parse the body
