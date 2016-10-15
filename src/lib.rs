@@ -5,14 +5,22 @@ extern crate lazy_static;
 
 extern crate regex;
 extern crate rustc_serialize as serialize;
+extern crate byteorder;
+
+use std::io;
 
 mod errors;
 use errors::*;
+mod util;
 
 pub mod armor;
+pub mod publickey;
 
 #[derive(Debug)]
+#[derive(PartialEq)]
+#[derive(Eq)]
 pub enum Packet {
+    PublicKey(publickey::PublicKey),
 }
 
 struct PacketIterator<'a> {
@@ -80,11 +88,14 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
             self.cursor += 1;
         }
 
-        // TODO: actually create an io::Cursor to pass to the packet reading
+        let mut stream = io::Cursor::new(&self.data[self.cursor..self.cursor+len]);
         self.cursor += len;
 
-        // TODO: pass the io::Cursor into the packet-specific parser
         match tag {
+            6 => match publickey::PublicKey::read(&mut stream) {
+                Ok(val) => Some(Ok(Packet::PublicKey(val))),
+                Err(err) => Some(Err(err))
+            },
             _ => Some(Err(ErrorKind::UnknownPacket(tag).into()))
         }
     }
@@ -153,6 +164,23 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
 =tKsK
 -----END PGP PRIVATE KEY BLOCK-----";
 
+        pub const EXPECTED_N: [u8; 128] = [166, 184, 160, 1, 253, 197, 7, 82, 163, 212, 128, 22, 97, 19, 164, 58, 113, 179, 43, 211, 78, 124, 38, 171, 24, 88, 15, 25, 101, 166, 166, 53, 101, 193, 8, 136, 96, 117, 81, 27, 66, 126, 252, 181, 76, 90, 51, 139, 74, 201, 30, 47, 208, 60, 237, 176, 117, 31, 177, 190, 186, 72, 139, 87, 126, 246, 98, 80, 40, 61, 149, 133, 42, 233, 215, 202, 34, 163, 127, 241, 171, 26, 10, 127, 180, 28, 191, 49, 198, 23, 142, 158, 10, 179, 3, 159, 114, 192, 95, 0, 154, 64, 226, 81, 99, 217, 100, 225, 181, 10, 142, 206, 90, 31, 62, 138, 2, 208, 187, 93, 47, 68, 117, 213, 249, 255, 148, 191];
+        pub const EXPECTED_E: [u8; 3] = [1, 0, 1];
     }
 
+    #[test]
+    pub fn can_read_pubkey() {
+        use super::*;
+        use tests::fixtures::*;
+        use publickey::*;
+        let mut packets = read_stream(armor::unarmor(PUBKEY).unwrap().as_ref());
+        assert!(packets.len() >= 1);
+        assert!(packets[0].is_ok());
+
+        let comparison_packet = Packet::PublicKey( PublicKey::Rsa( RsaPublicKey {
+            n: EXPECTED_N.to_owned(),
+            e: (&EXPECTED_E[..]).to_owned()
+        }));
+        assert_eq!(packets.remove(0).unwrap(), comparison_packet)
+    }
 }
