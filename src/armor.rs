@@ -8,7 +8,7 @@ lazy_static! {
 }
 
 #[derive(PartialEq)]
-enum ArmorType {
+pub enum ArmorType {
     Message(Option<usize>, Option<usize>),
     PublicKey,
     PrivateKey,
@@ -77,61 +77,95 @@ fn parsing_footer_lines() {
             == ArmorType::Message(Some(7), Some(9)));
 }
 
-fn armor_crc(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0x00B704CE; // from the spec
-    for b in data {
-        let byte : u32 = (*b) as u32;
-        crc ^= byte << 16;
-        for _ in 0..8 {
-            crc <<= 1;
-            if (crc & 0x01000000) == 0x01000000 {
-                crc ^= 0x01864CFB;
-            }
-        }
-    }
-    crc & 0x00ffffff
+pub struct Header {
+    pub name: String,
+    pub value: String
 }
 
-pub fn unarmor(armored: &str) -> Result<Vec<u8>> {
-    let mut lines = armored.lines();
+pub struct Armor {
+    pub kind: ArmorType,
+    pub data: Vec<u8>,
+    pub headers: Vec<Header>
+}
 
-    let begin_line = try!(lines.next().ok_or(ErrorKind::Armor));
-    let armor_type = try!(ArmorType::from_header(begin_line));
+impl Armor {
+    fn calc_crc(data: &[u8]) -> u32 {
+        let mut crc: u32 = 0x00B704CE; // from the spec
+        for b in data {
+            let byte : u32 = (*b) as u32;
+            crc ^= byte << 16;
+            for _ in 0..8 {
+                crc <<= 1;
+                if (crc & 0x01000000) == 0x01000000 {
+                    crc ^= 0x01864CFB;
+                }
+            }
+        }
+        crc & 0x00ffffff
+    }
 
-    // TODO: We should pass these skipped header lines out, as they
-    // could include information about multipart ordering that is
-    // needed before a stream could actually be read to packets.
-    while try!(lines.next().ok_or(ErrorKind::Armor)) != "" {}
+    pub fn read(armored: &str) -> Result<Armor> {
+        let mut lines = armored.lines();
 
-    // Parse the body
-    let mut data_bytes : Vec<u8> = Vec::new();
-    let mut body_read = false;
+        let begin_line = try!(lines.next().ok_or(ErrorKind::Armor));
+        let armor_type = try!(ArmorType::from_header(begin_line));
 
-    while !body_read {
-        let line = try!(lines.next().ok_or(ErrorKind::Armor));
-        if line.is_empty() {
+        // TODO: We should pass these skipped header lines out, as they
+        // could include information about multipart ordering that is
+        // needed before a stream could actually be read to packets.
+        let mut headers : Vec<Header> = Vec::new();
+        loop {
+            let line = try!(lines.next().ok_or(ErrorKind::Armor));
+            if line == "" {
+                break;
+            }
+            let mut pieces: Vec<_> = line.split(": ").collect();
+            if pieces.len() != 2 {
+                return Err(ErrorKind::Armor.into());
+            }
+            // we just checked the length above, we're safe here
+            let value = pieces.pop().unwrap();
+            let name = pieces.pop().unwrap();
+            headers.push(Header {
+                name: name.to_owned(),
+                value: value.to_owned()
+            })
+        }
+
+        // Parse the body
+        let mut data_bytes : Vec<u8> = Vec::new();
+        let mut body_read = false;
+
+        while !body_read {
+            let line = try!(lines.next().ok_or(ErrorKind::Armor));
+            if line.is_empty() {
+                return Err(ErrorKind::Armor.into());
+            }
+
+            if line.as_bytes()[0] == b'=' {
+                body_read = true;
+                let crc_bytes = try!(line[1..].from_base64().chain_err(|| "This doesn't look like base64 data"));
+                if crc_bytes.len() != 3 {
+                    return Err(ErrorKind::Armor.into());
+                }
+                let crc = ((crc_bytes[0] as u32) << 16) | ((crc_bytes[1] as u32) << 8) | (crc_bytes[2] as u32);
+                if crc != Armor::calc_crc(&data_bytes) {
+                    return Err(ErrorKind::Armor.into());
+                }
+            } else {
+                data_bytes.extend(try!(line.from_base64().chain_err(|| "This doesn't look like base64 data")));
+            }
+        }
+        let footer = try!(lines.next().ok_or(ErrorKind::Armor));
+        if try!(ArmorType::from_footer(footer)) != armor_type {
             return Err(ErrorKind::Armor.into());
         }
-
-        if line.as_bytes()[0] == b'=' {
-            body_read = true;
-            let crc_bytes = try!(line[1..].from_base64().chain_err(|| "This doesn't look like base64 data"));
-            if crc_bytes.len() != 3 {
-                return Err(ErrorKind::Armor.into());
-            }
-            let crc = ((crc_bytes[0] as u32) << 16) | ((crc_bytes[1] as u32) << 8) | (crc_bytes[2] as u32);
-            if crc != armor_crc(&data_bytes) {
-                return Err(ErrorKind::Armor.into());
-            }
-        } else {
-            data_bytes.extend(try!(line.from_base64().chain_err(|| "This doesn't look like base64 data")));
-        }
+        Ok(Armor{
+            kind: armor_type,
+            data: data_bytes,
+            headers: headers
+        })
     }
-    let footer = try!(lines.next().ok_or(ErrorKind::Armor));
-    if try!(ArmorType::from_footer(footer)) != armor_type {
-        return Err(ErrorKind::Armor.into());
-    }
-    Ok(data_bytes)
 }
 
 #[cfg(test)]
@@ -141,7 +175,15 @@ mod tests {
 
     #[test]
     fn unarmor_simple_gpg_keys() {
-        assert!(unarmor(PUBKEY).is_ok());
-        assert!(unarmor(PRIVKEY).is_ok());
+        assert!(Armor::read(PUBKEY).is_ok());
+        assert!(Armor::read(PRIVKEY).is_ok());
+    }
+
+    #[test]
+    fn parse_headers() {
+        let pubkey = Armor::read(PUBKEY).unwrap();
+        assert!(pubkey.headers.len() == 1);
+        assert!(pubkey.headers[0].name == "Version");
+        assert!(pubkey.headers[0].value == "GnuPG v2");
     }
 }

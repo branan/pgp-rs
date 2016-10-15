@@ -14,13 +14,15 @@ use errors::*;
 mod util;
 
 pub mod armor;
+pub use armor::Armor;
 pub mod publickey;
+pub use publickey::PublicKey;
 
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Eq)]
 pub enum Packet {
-    PublicKey(publickey::PublicKey),
+    PublicKey(PublicKey),
 }
 
 struct PacketIterator<'a> {
@@ -97,7 +99,7 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
         self.cursor += len;
 
         match tag {
-            6 => match publickey::PublicKey::read(&mut stream) {
+            6 => match PublicKey::read(&mut stream) {
                 Ok(val) => Some(Ok(Packet::PublicKey(val))),
                 Err(err) => Some(Err(err))
             },
@@ -177,12 +179,12 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
     pub fn can_read_pubkey() {
         use super::*;
         use tests::fixtures::*;
-        use publickey::*;
-        let mut packets = read_stream(armor::unarmor(PUBKEY).unwrap().as_ref());
+        let stream = Armor::read(PUBKEY).unwrap().data;
+        let mut packets = read_stream(stream.as_ref());
         assert!(packets.len() >= 1);
         assert!(packets[0].is_ok());
 
-        let comparison_packet = Packet::PublicKey( PublicKey::Rsa( RsaPublicKey {
+        let comparison_packet = Packet::PublicKey( PublicKey::Rsa( publickey::RsaPublicKey {
             n: EXPECTED_N.to_owned(),
             e: (&EXPECTED_E[..]).to_owned(),
             timestamp: 1436993276
