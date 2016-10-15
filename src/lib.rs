@@ -25,7 +25,7 @@ pub enum Packet {
     PublicKey(PublicKey),
 }
 
-struct PacketIterator<'a> {
+pub struct PacketIterator<'a> {
     data: &'a[u8],
     cursor: usize,
 
@@ -108,10 +108,6 @@ impl<'a> std::iter::Iterator for PacketIterator<'a> {
     }
 }
 
-pub fn read_stream(data: &[u8]) -> Vec<Result<Packet>> {
-    PacketIterator::new(data).collect()
-}
-
 #[cfg(test)]
 mod tests {
     pub mod fixtures {
@@ -180,7 +176,7 @@ y+3ziLhRboOzva3EHp/mmgzWcneUs58MVVErRhAQxKHJKQ==
         use super::*;
         use tests::fixtures::*;
         let stream = Armor::read(PUBKEY).unwrap().data;
-        let mut packets = read_stream(stream.as_ref());
+        let mut packets: Vec<_> = PacketIterator::new(&stream).collect();
         assert!(packets.len() >= 1);
         assert!(packets[0].is_ok());
 
